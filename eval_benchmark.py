@@ -8,12 +8,12 @@ from typing import List, Dict, Any
 
 
 DETECTION_DICT = {
-    "GWOSC GW Event": {"false": ['no', 'not'], "true": []},
-    "MDD": {"false": ["healthy"], "true": ["depressive"]},
+    "GWOSC GW Event": {"false": ['no', 'not','没有','未'], "true": []},
+    "MDD": {"false": ["healthy","没有"], "true": ["depressive","患有"]},
     "MIMII Due": {"false": ['normal'], "true": ['anomaly']},
-    "STEAD": {"false": ['no', 'not'], "true": []},
-    "TIMECAP": {"false": ['not'], "true": []},
-    "TS_MQA": {"false": ['normal'], "true": ['anomaly']},
+    "STEAD": {"false": ['no', 'not','没有','未'], "true": []},
+    "TIMECAP": {"false": ['not',"不会"], "true": []},
+    "TS_MQA": {"false": ['normal','no anomalies',"正常"], "true": ['anomaly','anomalous',"异常"]},
 }
 
 
@@ -223,6 +223,8 @@ def detect(generated_text, dataset_name):
     true_indicators = detection_config.get("true", [])
     
     generated_lower = generated_text.lower()
+
+    # import pdb; pdb.set_trace()
     
     # 1. 如果在生成内容中检测到false的list中的任意一个，就认为是false
     for indicator in false_indicators:
@@ -325,7 +327,7 @@ def detection_eval(data_list: List[Dict[str, Any]], dataset_name: str, task: str
             false_negative += 1
             
         # 只有在Event Detection任务且检测正确且包含事件时才进行数字抓取
-        if task == "Event Detection" and gt_contain and predicted_contain:
+        if task == "event detection" and gt_contain and predicted_contain:
             predicted_times = extract_predicted_times(generated_text)
             
             gt_time_fields = []
@@ -357,7 +359,7 @@ def detection_eval(data_list: List[Dict[str, Any]], dataset_name: str, task: str
     # 成功率：非None预测占比
     results['success_rate'] = success_count / total_samples if total_samples > 0 else 0.0
 
-    if task == "Event Detection":
+    if task == "event detection":
         results['mean_relative_error'] = np.mean(relative_errors) if relative_errors else 0.0
         results['median_relative_error'] = np.median(relative_errors) if relative_errors else 0.0
     
@@ -442,12 +444,14 @@ def evaluate_all_files(input_folder: str, output_csv: str):
             # 获取第一个样本的信息来判断数据集类型
             first_item = data_list[0]
             dataset_name = first_item.get('dataset_name', '')
-            task = first_item.get('task', '')
+            task = first_item.get('task', '').lower()
+
+            # if dataset_name !="TS_MQA": continue
             
             # 根据数据集类型调用相应的评估函数
             result_row = {'filename': filename}
 
-            if task == "Classification" or task == "QA":
+            if task == "classification" or task == "qa":
                 print(f"  Evaluating as classification task: {task}")
                 eval_results = classification_eval(data_list)                
             else:

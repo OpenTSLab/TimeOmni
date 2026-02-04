@@ -126,6 +126,12 @@ Training and evaluation outputs are saved under `exp/`, including:
 
 ---
 
+## 🙏 Acknowledgement
+
+This codebase is adapted from [KimMeen/Time-LLM](https://github.com/KimMeen/Time-LLM). Thanks to the authors for their excellent work.
+
+---
+
 ## 📜 Citation
 
 If you find this work useful, please cite:
