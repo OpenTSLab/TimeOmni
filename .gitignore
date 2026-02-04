@@ -177,5 +177,4 @@ exp/
 output/
 *.out
 *.log
-*.txt
 tmp.*

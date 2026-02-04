@@ -7,6 +7,8 @@
 
 **🎉 Accepted to ICLR 2026**
 
+**This is the official SciTS (TimeOmni) repository.**
+
 > **SciTS** is a large-scale benchmark for scientific time series understanding and generation across 12 domains and 43 tasks. **TimeOmni** is a unified framework that equips LLMs with the ability to understand and generate time series while staying compatible with general-purpose LLM training.
 
 ---
