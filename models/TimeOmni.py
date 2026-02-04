@@ -5,8 +5,7 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 
-from transformers import LlamaConfig, LlamaModel, LlamaTokenizer, GPT2Config, GPT2Model, GPT2Tokenizer, BertConfig, \
-    BertModel, BertTokenizer, AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer
 from layers.Embed import PatchEmbedding
 import transformers
 from layers.StandardNorm import Normalize
@@ -483,17 +482,17 @@ class Model(nn.Module):
     def select_analysis_patch_embedding(self, audio_length):
         """
         Select appropriate analysis patch embedding based on audio length.
-        patch_len list为1,2,4,8,16... 确保了ts_tokens在100-200之间
+        patch_len list is 1,2,4,8,16... to keep ts_tokens in the 100–200 range.
         """
         target_patch_len = audio_length / self.ts_tokens
         
-        # 从 analysis_patch_lens 中选择比 target_patch_len 小的值中最大的那个
+        # Select the largest value <= target_patch_len from analysis_patch_lens.
         valid_patch_lens = [pl for pl in self.analysis_patch_lens if pl <= target_patch_len]
         
         if valid_patch_lens:
             selected_patch_len = max(valid_patch_lens)
         else:
-            # 如果没有比 target_patch_len 小的值，选择最小的那个
+            # If none <= target_patch_len, choose the smallest.
             selected_patch_len = min(self.analysis_patch_lens)
         
         return selected_patch_len
@@ -590,8 +589,9 @@ class ReprogrammingLayer(nn.Module):
             )
         else:
             # Original attention-based reprogramming
-            # 重编程层本质上是在问："这个时间序列patch最像LLM词汇表中的哪些词？"
-            # 然后将相似的词的表示加权组合，得到在LLM语义空间中的等价表示。
+            # The reprogramming layer asks: which LLM vocabulary tokens are most similar
+            # to this time-series patch? It then combines those token embeddings to
+            # obtain an equivalent representation in the LLM semantic space.
             d_keys = d_keys or (d_model // n_heads)
 
             self.query_projection = nn.Linear(d_model, d_keys * n_heads)

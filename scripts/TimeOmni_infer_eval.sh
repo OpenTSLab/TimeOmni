@@ -1,57 +1,8 @@
 #!/bin/bash
 
-# 时序数据推理评估脚本
-
 cd ~/TimeOmni
 source ~/miniconda3/bin/activate timeomni
 export TOKENIZERS_PARALLELISM=false
-
-# ---------- Dynamic master port selection (avoid conflicts) ----------
-# Honor externally provided MASTER_PORT or MAIN_PROCESS_PORT if set.
-SHARED_DIR="~/TimeOmni/exp"
-PORT_FILE="$SHARED_DIR/.master_port_current_run"
-DEFAULT_PORT=29500
-
-# Normalize any provided alias
-[ -n "$MAIN_PROCESS_PORT" ] && export MASTER_PORT="$MAIN_PROCESS_PORT"
-
-if [ -z "$MASTER_PORT" ]; then
-  if [ "${NODE_RANK:-0}" = "0" ]; then
-    # Node 0 chooses a free port
-    CHOSEN_PORT=$(python - <<'EOF'
-import socket, random
-candidates = list(range(20000,40000))
-random.shuffle(candidates)
-for p in candidates[:200]:
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        try:
-            s.bind(('', p))
-        except OSError:
-            continue
-        print(p)
-        break
-EOF
-)
-    if [ -z "$CHOSEN_PORT" ]; then
-      CHOSEN_PORT=$DEFAULT_PORT
-    fi
-    echo -n "$CHOSEN_PORT" > "$PORT_FILE"
-  else
-    # Other nodes wait for port file
-    for i in $(seq 1 60); do
-      [ -f "$PORT_FILE" ] && break
-      sleep 1
-    done
-    CHOSEN_PORT=$(cat "$PORT_FILE" 2>/dev/null || echo "$DEFAULT_PORT")
-  fi
-  export MASTER_PORT="$CHOSEN_PORT"
-fi
-
-# Safety echo (optional - uncomment if debugging)
-# echo "Using MASTER_PORT=$MASTER_PORT on NODE_RANK=${NODE_RANK:-0}"
-
-# ---------- End dynamic port selection ----------
 
 # Multi-node distributed training configuration
 # Use platform-injected environment variables
@@ -77,7 +28,7 @@ for model_dir in $model_dirs; do
             --node_rank=$NODE_RANK \
             --nproc_per_node=$PROC_PER_NODE \
             --master_addr=$MASTER_ADDR \
-            --master_port=$MASTER_PORT \
+            --master_port=29500 \
             infer_benchmark.py \
             --data_file_list \
             dataset/Release_v1/CWRU-Manufacturing-Classification-Industrial_bearings/CWRU-Manufacturing-Classification-Industrial_bearings-test-400.jsonl \

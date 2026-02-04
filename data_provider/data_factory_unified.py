@@ -5,14 +5,14 @@ from .dataset import Dataset_Unified, Collator_Unified
 
 def data_provider(args, flag, tokenizer=None):
     """
-    统一的数据提供器，根据flag和参数配置返回相应的数据集和数据加载器
-    
-    训练数据分为三种情况：
-    1. 只有分析jsonl（analysis_only=True）
-    2. 只有forecast jsonl（默认情况）
-    3. 两者都有（add_analysis=True）
-    
-    验证和测试数据只有forecast jsonl，或者全部为None
+    Unified data provider that returns datasets and loaders based on flag and args.
+
+    Training data cases:
+    1. Analysis-only JSONL (analysis_only=True)
+    2. Forecast-only JSONL (default)
+    3. Both analysis and forecast (add_analysis=True)
+
+    Validation and test data use forecast JSONL only, or return None.
     """
 
     if flag == 'train':
@@ -24,11 +24,11 @@ def data_provider(args, flag, tokenizer=None):
         drop_last = False
         batch_size = args.eval_batch_size
 
-    # 根据flag确定数据文件路径
+    # Determine data file paths based on flag.
     if flag == 'train':
-        # 训练阶段：根据配置决定使用哪些数据集
+        # Training phase: choose datasets based on configuration.
         
-        # 情况1：只有分析数据
+        # Case 1: analysis-only data.
         if getattr(args, 'analysis_only', False):
             if not hasattr(args, 'analysis_jsonl_file_path'):
                 raise ValueError("analysis_only=True but analysis_jsonl_file_path not provided")
@@ -55,7 +55,7 @@ def data_provider(args, flag, tokenizer=None):
             
             return None, None, dataset_analysis, analysis_loader
         
-        # 情况2和3：有forecast数据（可能还有分析数据）
+        # Cases 2 and 3: forecast data (optionally with analysis data).
         else:
             if not hasattr(args, 'forecast_jsonl_file_path'):
                 raise ValueError("forecast_jsonl_file_path not provided for training")
@@ -71,7 +71,7 @@ def data_provider(args, flag, tokenizer=None):
             
             collator_forecast = Collator_Unified(tokenizer=tokenizer, pad_side_time='left')
             
-            # 情况3：同时有分析数据
+            # Case 3: both analysis and forecast data.
             if getattr(args, 'add_analysis', False):
                 if not hasattr(args, 'analysis_jsonl_file_path'):
                     raise ValueError("add_analysis=True but analysis_jsonl_file_path not provided")
@@ -86,20 +86,6 @@ def data_provider(args, flag, tokenizer=None):
                 )
 
                 collator_analysis = Collator_Unified(tokenizer=tokenizer, pad_side_time='right')
-                
-                # # 计算各数据集的batch size比例
-                # forecast_dataset_len = len(dataset_forecast)
-                # analysis_dataset_len = len(dataset_analysis)
-                # total_dataset_len = forecast_dataset_len + analysis_dataset_len
-                
-                # forecast_batch_size = round(batch_size * forecast_dataset_len / total_dataset_len)
-                # analysis_batch_size = round(batch_size * analysis_dataset_len / total_dataset_len)
-                
-                # # 确保batch size至少为1
-                # if forecast_batch_size == 0:
-                #     forecast_batch_size = 1
-                # if analysis_batch_size == 0:
-                #     analysis_batch_size = 1
                 
                 forecast_loader = DataLoader(
                     dataset_forecast,
@@ -121,7 +107,7 @@ def data_provider(args, flag, tokenizer=None):
                 
                 return dataset_forecast, forecast_loader, dataset_analysis, analysis_loader
             
-            # 情况2：只有forecast数据
+            # Case 2: forecast-only data.
             else:
                 forecast_loader = DataLoader(
                     dataset_forecast,
@@ -134,9 +120,9 @@ def data_provider(args, flag, tokenizer=None):
                 
                 return dataset_forecast, forecast_loader, None, None
     
-    # 验证和测试阶段：只有forecast数据
+    # Validation and test: forecast data only.
     else:
-        # 如果是只有分析数据的情况，直接返回None
+        # If analysis-only, return None.
         if getattr(args, 'analysis_only', False):
             return None, None, None, None
         
@@ -158,17 +144,7 @@ def data_provider(args, flag, tokenizer=None):
             use_scaler=False,
             unfold_channels=False,
             max_tokens=100000 # if larger than 100000, will OOM(140GB RAM)
-            # patch_len=getattr(args, 'patch_len', None)
         )
-
-        # dataset_forecast_unnorm = Dataset_Unified(
-        #     jsonl_file_path=jsonl_file_path,
-        #     tokenizer=tokenizer,
-        #     base_dir=getattr(args, 'base_dir', None),
-        #     use_scaler=False,
-        #     unfold_channels=getattr(args, 'unfold_channels', True),
-        #     # patch_len=getattr(args, 'patch_len', None)
-        # )
 
         collator = Collator_Unified(tokenizer=tokenizer, pad_side_time='left')
 
@@ -181,14 +157,4 @@ def data_provider(args, flag, tokenizer=None):
             drop_last=drop_last
         )
 
-        # forecast_loader_unnorm = DataLoader(
-        #     dataset_forecast_unnorm,
-        #     batch_size=batch_size,
-        #     shuffle=shuffle_flag,
-        #     num_workers=getattr(args, 'num_workers', 0),
-        #     collate_fn=collator,
-        #     drop_last=drop_last
-        # )
-
-        # return dataset_forecast, forecast_loader, dataset_forecast_unnorm, forecast_loader_unnorm
         return dataset_forecast, forecast_loader, None, None

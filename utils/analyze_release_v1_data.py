@@ -136,7 +136,7 @@ def find_jsonl_files(root_dir):
     """Find all JSONL files in subdirectories of root_dir."""
     jsonl_files = []
     root_path = Path(root_dir)
-    # 如果路径包含 'train'，只遍历该目录下的 jsonl 文件
+    # If the path contains 'train', only scan JSONL files in that directory.
     if 'train' in str(root_path).lower():
         for file_path in root_path.glob("*.jsonl"):
             jsonl_files.append(file_path)

@@ -21,14 +21,6 @@ from torch.optim import lr_scheduler
 from tqdm import tqdm
 from transformers import get_cosine_schedule_with_warmup
 
-# Import PEFT for DoRA support
-try:
-    from peft import LoraConfig, get_peft_model, TaskType
-    PEFT_AVAILABLE = True
-except ImportError:
-    print("Warning: PEFT not available. DoRA fine-tuning will not work. Install with: pip install peft")
-    PEFT_AVAILABLE = False
-
 from models import TimeOmni
 from data_provider.data_factory_unified import data_provider
 from utils.tools import EarlyStopping, adjust_learning_rate
@@ -37,15 +29,15 @@ from utils.tools import EarlyStopping, adjust_learning_rate
 class ConfigManager:
     """Manages configuration and environment information collection and saving"""
     
-    # 重要程序文件清单
+    # Key program files list.
     IMPORTANT_FILES = [
-        # 主要运行脚本
+        # Main run script.
         'run_main_refactored_unified.py',
         
-        # 模型文件
+        # Model file.
         'models/TimeOmni.py',
         
-        # 数据提供者
+        # Data provider.
         'data_provider/data_factory_unified.py',
         'data_provider/dataset.py',
 
@@ -63,7 +55,7 @@ class ConfigManager:
     def save_important_code_files(path: str, accelerator: Accelerator) -> None:
         """Save important code files to log folder"""
         try:
-            # 创建代码备份文件夹
+            # Create code backup folder.
             code_backup_dir = os.path.join(path, 'code_backup')
             if not os.path.exists(code_backup_dir):
                 os.makedirs(code_backup_dir)
@@ -71,7 +63,7 @@ class ConfigManager:
             saved_files = []
             missing_files = []
             
-            # 获取项目根目录
+            # Get project root directory.
             current_dir = os.getcwd()
             
             for file_path in ConfigManager.IMPORTANT_FILES:
@@ -79,14 +71,14 @@ class ConfigManager:
                 
                 if os.path.exists(full_path):
                     try:
-                        # 创建目标目录结构
+                        # Create target directory structure.
                         target_file_path = os.path.join(code_backup_dir, file_path)
                         target_dir = os.path.dirname(target_file_path)
                         
                         if not os.path.exists(target_dir):
                             os.makedirs(target_dir)
                         
-                        # 复制文件
+                        # Copy file.
                         shutil.copy2(full_path, target_file_path)
                         saved_files.append(file_path)
                         
@@ -469,11 +461,6 @@ class TimeOmniExperiment:
         elif self.args.ckpt_path and not self.args.load_training_states:
             self.accelerator.load_state(self.args.ckpt_path, load_module_strict=False, load_module_only=True)
         
-        # # Setup loss functions
-        # self.criterion = nn.MSELoss()
-        # self.mae_metric = nn.L1Loss()
-        # self.ce_criterion = nn.CrossEntropyLoss()
-        
         # Setup early stopping
         self.early_stopping = EarlyStopping(accelerator=self.accelerator, patience=self.args.patience) if self.args.use_early_stop else None
         
@@ -806,8 +793,7 @@ class TimeOmniExperiment:
                 try:
                     input_ts = batch_data['input_ts_list']
                     input_ts_mask = batch_data.get('input_ts_mask_list', None)  # List[Tensor(T) | None]
-                    # gt_ts = batch_data.get('gt_ts', None)  # (Batch, Time, Channels) 或 None
-                    gt_ts_list = batch_data.get('gt_ts_list', None)  # List[Tensor(T, C)] 或 None
+                    gt_ts_list = batch_data.get('gt_ts_list', None)  # List[Tensor(T, C)] or None
                     input_ids = batch_data['input_ids']
                     
                     if input_ts is None:
@@ -816,7 +802,7 @@ class TimeOmniExperiment:
 
                     input_ts = [input.to(self.accelerator.device) for input in input_ts]
 
-                    # 使用TimeOmni的forecast模式进行预测
+                    # Use TimeOmni forecast mode for prediction.
                     if self.args.use_amp:
                         with torch.cuda.amp.autocast():
                             outputs, outputs_norm = self.model(input_ts, input_ids=input_ids, gt_ts=gt_ts_list, mode='forecast')
@@ -916,7 +902,7 @@ class TimeOmniExperiment:
                                 sample_relative_maes_norm.append(torch.tensor(0.0, device=self.accelerator.device))
 
                     if len(sample_losses) == 0:
-                        # 没有可用 GT，跳过此 batch
+                        # No valid GT available, skip this batch.
                         self.accelerator.print(f"Warning: gt_ts_list has no valid entries for batch {i}, skipping...")
                         continue
 

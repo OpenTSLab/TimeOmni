@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# 时序数据推理评估脚本
-
 cd ~/TimeOmni
 source ~/miniconda3/bin/activate timeomni
 export TOKENIZERS_PARALLELISM=false

@@ -25,14 +25,14 @@ except ImportError:
 class Dataset_Unified(Dataset):
     def __init__(self, tokenizer: AutoTokenizer, jsonl_file_path=None, base_dir=None, use_scaler=True, unfold_channels=True, items: list=None, max_tokens=2000):
         """
-        统一的数据集类，直接在dataset中加载音频
-        :param jsonl_file_path: JSONL 文件路径
+        Unified dataset class that loads time-series data in the dataset.
+        :param jsonl_file_path: JSONL file path
         :param tokenizer: Hugging Face tokenizer
-        :param base_dir: 音频文件根目录（可选）
-        :param use_scaler: 是否对时间序列数据进行标准化处理
-        :param unfold_channels: 是否将输出从 (T, C) 变换为 (T*C, 1)，默认为True
-        :param items: 直接传入数据列表，格式同jsonl文件内容
-        :param max_tokens: 最大文本token数，超过则截断
+        :param base_dir: root directory for media files (optional)
+        :param use_scaler: whether to standardize time-series data
+        :param unfold_channels: whether to reshape output from (T, C) to (T*C, 1)
+        :param items: pass data list directly, same format as JSONL
+        :param max_tokens: max text token length (truncate if exceeded)
         """
         self.data = []
         self.tokenizer = tokenizer
@@ -54,29 +54,29 @@ class Dataset_Unified(Dataset):
 
     def load_ts_data(self, file_path: str, ori_file_path: str = None) -> tuple:
         """
-        根据文件后缀读取时间序列数据，返回格式为 T x C (时间 x 通道) 或 T*C x 1
-        
-        :param file_path: 数据文件路径
-        :param ori_file_path: 切分之前的原始文件路径
-        :return: 元组 (data_tensor, mask_tensor)
-                - data_tensor: 数据张量，形状为 (T, C) 或 (T*C, 1)
-                - mask_tensor: 缺失值mask，形状与data_tensor相同，'X'位置为1，其他为0
-                - ori_channels: 原始通道数
+        Load time-series data by file extension. Returns T x C (time x channels) or T*C x 1.
+
+        :param file_path: data file path
+        :param ori_file_path: original file path before segmentation
+        :return: tuple (data_tensor, mask_tensor)
+            - data_tensor: tensor shaped (T, C) or (T*C, 1)
+            - mask_tensor: missing-value mask, same shape as data_tensor; 'X' positions are 1
+            - ori_channels: original channel count
         """
 
         def _load_ts_data(file_path: str) -> tuple:
             """
-            内部函数，根据文件后缀读取时间序列数据
-            支持格式：
-            - 音频文件：.wav, .mp3, .flac, .m4a (使用 torchaudio)
-            - CSV文件：.csv (假设每列是一个通道)
-            - NumPy文件：.npy
-            - MNE文件：.fif (EEG/MEG数据)
-            
+            Internal helper to load time-series data by file extension.
+            Supported formats:
+            - Audio: .wav, .mp3, .flac, .m4a (via torchaudio)
+            - CSV: .csv (each column is a channel)
+            - NumPy: .npy
+            - MNE: .fif (EEG/MEG data)
+
             Returns:
-                tuple: (np_data, missing_mask) 
-                    - np_data: 时间序列数据
-                    - missing_mask: 'X'缺失值的mask，形状与np_data相同，'X'位置为1，其他为0
+                tuple: (np_data, missing_mask)
+                    - np_data: time-series data
+                    - missing_mask: 'X' missing-value mask, same shape as np_data
             """
             if not os.path.exists(file_path):
                 raise FileNotFoundError(f"File not found: {file_path}")
@@ -85,45 +85,45 @@ class Dataset_Unified(Dataset):
             file_ext = os.path.splitext(file_path)[1].lower()
             
             if file_ext in ['.wav', '.mp3', '.flac', '.m4a']:
-                # 音频文件：使用torchaudio
+                # Audio file: use torchaudio.
                 waveform, _ = torchaudio.load(file_path)
-                # torchaudio返回格式为 (C, T)，需要转置为 (T, C)
+                # torchaudio returns (C, T), transpose to (T, C).
                 np_data = waveform.transpose(0, 1).numpy()
                 
             elif file_ext == '.csv':
-                # CSV文件：假设每列是一个通道
+                # CSV file: assume each column is a channel.
                 df = pd.read_csv(file_path, header=None)
                 
-                # 检测'X'缺失值并创建mask
+                # Detect 'X' missing values and build mask.
                 x_mask = (df == 'X') | (df == 'x')
                 
                 if x_mask.any().any():
-                    missing_mask = x_mask.astype(np.float32).values  # 转换为numpy数组
-                    # 将'X'替换为NaN
+                    missing_mask = x_mask.astype(np.float32).values  # Convert to numpy array.
+                    # Replace 'X' with NaN.
                     df = df.replace(['X', 'x'], np.nan)
-                    # 转换为数值类型
+                    # Convert to numeric.
                     df = df.apply(pd.to_numeric, errors='coerce')
-                    # 使用线性插值填补缺失值
+                    # Fill missing values via linear interpolation.
                     df = df.interpolate(method='linear', limit_direction='both')
                 
                 np_data = df.values
                 
             elif file_ext == '.npy':
-                # NumPy文件
+                # NumPy file.
                 np_data = np.load(file_path)
-                # 如果是1D数组，扩展为 (T, 1)
+                # If 1D, expand to (T, 1).
                 if np_data.ndim == 1:
                     np_data = np_data.reshape(-1, 1)
                     
             elif file_ext == '.fif':
-                # MNE文件（EEG/MEG数据）
+                # MNE file (EEG/MEG data).
                 if not MNE_AVAILABLE:
                     raise ImportError("MNE-Python is required to read .fif files. Please install it with: pip install mne")
                 
-                # 读取raw数据
+                # Read raw data.
                 raw = mne.io.read_raw_fif(file_path, preload=True, verbose=False)
-                # 获取数据：MNE返回 (n_channels, n_times)，需要转置
-                np_data = raw.get_data().T  # 转置为 (T, C)
+                # MNE returns (n_channels, n_times), transpose it.
+                np_data = raw.get_data().T  # Transpose to (T, C).
                 
             else:
                 raise ValueError(f"Unsupported file format: {file_ext}")
@@ -134,36 +134,36 @@ class Dataset_Unified(Dataset):
             np_data, missing_mask = _load_ts_data(file_path)
         except Exception as e:
             print(f"Error loading {file_path}: {e}")
-            # 返回一个小的占位符张量，避免程序崩溃
+            # Return a small placeholder tensor to avoid crashing.
             return torch.zeros((1, 1), dtype=torch.float32), None
 
-        # 最大长度240k
+        # Max length: 240k.
         max_length = 240000
         np_data = np_data[:max_length]
-        # 用sklearn的SimpleImputer更简洁地填充NaN和inf
+        # Use SimpleImputer to fill NaN and inf.
         if np_data.size > 0:
-            # 先将inf/-inf替换为NaN
+            # Replace inf/-inf with NaN first.
             np_data = np.where(np.isfinite(np_data), np_data, np.nan)
-            # 如果全是NaN，直接返回占位符
+            # If all NaN, return placeholder.
             if np.isnan(np_data).all():
                 return torch.zeros((1, 1), dtype=torch.float32), None
-            # 用每列均值填充NaN
+            # Fill NaN with column means.
             imputer = SimpleImputer(missing_values=np.nan, strategy='mean')
             np_data = imputer.fit_transform(np_data)
         missing_mask = missing_mask[:max_length] if missing_mask is not None else None
 
         assert np_data.ndim == 2, f"Data must be 2D array with shape (T, C), got shape {np_data.shape}"
         
-        # 验证数据类型
+        # Validate data type.
         if not np.issubdtype(np_data.dtype, np.number):
             raise ValueError(f"Data contains non-numeric values. Data type: {np_data.dtype}, sample data: {np_data[:5]}")
-        
-        # 如果启用了标准化，对数据进行标准化处理
+
+        # Standardize data if enabled.
         if self.use_scaler:
-            # 为每个样本创建新的scaler实例，避免多进程冲突
+            # Create a scaler per sample to avoid multi-process conflicts.
             local_scaler = StandardScaler()
             if ori_file_path and os.path.exists(ori_file_path):
-                # 如果提供了原始文件路径，使用原始数据进行fit_transform
+                # If original path is provided, fit on original data.
                 ori_np_data, ori_missing_mask = _load_ts_data(ori_file_path)
                 if ori_np_data.ndim == 2:
                     local_scaler.fit(ori_np_data)
@@ -172,26 +172,15 @@ class Dataset_Unified(Dataset):
                     raise ValueError(f"Original data must be 2D array with shape (T, C), got shape {ori_np_data.shape}")
             else:
                 np_data = local_scaler.fit_transform(np_data)
-        
-        # 统一转换为float32类型的tensor
+
+        # Convert to float32 tensors.
         data = torch.from_numpy(np_data.astype(np.float32))
         mask = torch.from_numpy(missing_mask.astype(np.float32)) if missing_mask is not None else None
 
-        # 根据unfold_channels参数决定是否展平维度
+        # Flatten based on unfold_channels.
         if self.unfold_channels:
-            # T, C = data.shape
-            
-            # 如果指定了patch_len和stride，需要确保patch不跨越不同的channel
-            # if self.patch_len is not None:
-            #     padding = torch.zeros(self.patch_len, C)
-            #     data = torch.cat([data, padding], dim=0)
-            #     T = data.shape[0]  # 更新时间维度
-
-            # 按通道顺序展平：先第1个通道，然后第2个通道，以此类推
-            # 将 (T, C) 转置为 (C, T)，然后展平为 (C*T, 1)
-            # data = data.transpose(0, 1).reshape(-1, 1)  # 从 (T, C) -> (C, T) -> (C*T, 1)
-            data = data.reshape(-1, 1)  # 直接展平为 (T*C, 1)
-            mask = mask.reshape(-1, 1) if mask is not None else None   # mask也展平为 (T*C, 1)
+            data = data.reshape(-1, 1)  # Flatten directly to (T*C, 1).
+            mask = mask.reshape(-1, 1) if mask is not None else None   # Flatten mask to (T*C, 1).
         
         return data, mask
 
@@ -206,15 +195,14 @@ class Dataset_Unified(Dataset):
         input_text_chat = {"role": "user", "content": input_text}
 
         if "gt_ts" in sample and sample["gt_ts"]:
-            # 预测任务：只有输入，没有目标文本
+            # Forecast task: input only, no target text.
             input_ids = self.tokenizer.apply_chat_template(
                 [input_text_chat],
                 tokenize=True,
                 truncation=True,
                 max_length=self.max_tokens
             )
-            # input_ids = None
-            labels = None  # 预测时不需要labels
+            labels = None  # No labels needed for forecasting.
         else:
             target_text = {"role": "assistant", "content": gt_text}
             # Tokenize
@@ -230,12 +218,11 @@ class Dataset_Unified(Dataset):
                 truncation=True,
                 max_length=self.max_tokens
             )
-            # 合并 input + target，用于 causal LM 训练
+            # Concatenate input + target for causal LM training.
             input_ids = input_encoding + target_encoding
-            labels = [-100] * len(input_encoding) + target_encoding  # 仅计算 Assistant 部分 loss
-            labels[-1] = -100 # 最后一个 token 不计算 loss
+            labels = [-100] * len(input_encoding) + target_encoding  # Compute loss on assistant part only.
+            labels[-1] = -100 # Do not compute loss for the last token.
 
-        # input_ts_path = sample["input_ts"]["path"]
         input_ts = sample['input_ts']
         if input_ts:
             if input_ts['already_segment']:
@@ -248,18 +235,12 @@ class Dataset_Unified(Dataset):
             input_ts_tensor = None
             if input_ts_path:
                 if input_ts['already_segment']:
-                    # ori_ts_path = input_ts['original']['ori_path']
-                    # if self.base_dir:
-                    #     ori_ts_path = os.path.join(self.base_dir, ori_ts_path)
-                    # input_ts_tensor, input_ts_mask = self.load_ts_data(input_ts_path, ori_file_path=ori_ts_path)
                     input_ts_tensor, input_ts_mask = self.load_ts_data(input_ts_path)
                 else:
-                    input_ts_tensor, input_ts_mask = self.load_ts_data(input_ts_path)  # 返回data和mask
+                    input_ts_tensor, input_ts_mask = self.load_ts_data(input_ts_path)  # Return data and mask.
         else:
             input_ts_path = None
-            # input_ts_tensor = torch.zeros((1, 1), dtype=torch.float32)  # 占位符，避免None
-            # input_ts_tensor = torch.randn((1, 1), dtype=torch.float32)  # 占位符，避免None
-            input_ts_tensor = torch.ones((1, 1), dtype=torch.float32) * 10 # 占位符，避免None
+            input_ts_tensor = torch.ones((1, 1), dtype=torch.float32) * 10 # Placeholder to avoid None.
             input_ts_mask = None
 
         result = {
@@ -278,7 +259,7 @@ class Dataset_Unified(Dataset):
             "input_ts_path": input_ts_path
         }
 
-        # 如果有预测目标路径，也加载预测音频
+        # If target path exists, also load target time series.
         if "gt_ts" in sample and sample["gt_ts"]:
             gt_ts_path = sample["gt_ts"]["path"]
             if self.base_dir:
@@ -287,7 +268,7 @@ class Dataset_Unified(Dataset):
             gt_ts = None
             gt_ts_mask = None
             if gt_ts_path:
-                gt_ts, gt_ts_mask = self.load_ts_data(gt_ts_path)  # 返回tensor和mask
+                gt_ts, gt_ts_mask = self.load_ts_data(gt_ts_path)  # Return tensor and mask.
             
             result["gt_ts"] = gt_ts
             result["gt_ts_mask"] = gt_ts_mask
@@ -304,21 +285,21 @@ class Collator_Unified:
 
     def _pad_ts_tensors(self, ts_list: List[torch.Tensor]) -> torch.Tensor:
         """
-        对时间序列张量列表进行padding，统一通道数和时间维度
-        
-        :param ts_list: 时间序列张量列表，每个张量形状为 (T, C)
-        :return: padding后的张量，形状为 (Batch, Max_Time, Max_Channels)
+        Pad a list of time-series tensors to unify channels and time length.
+
+        :param ts_list: list of tensors shaped (T, C)
+        :return: padded tensor shaped (Batch, Max_Time, Max_Channels)
         """
         if not ts_list or any(ts is None for ts in ts_list):
             return None
             
-        # 统一最大长度
+        # Compute max sizes.
         max_channels = max(ts.shape[1] for ts in ts_list if ts is not None)
         max_time = max(ts.shape[0] for ts in ts_list if ts is not None)
 
         padded_ts_list = []
         for ts in ts_list:
-            # 先在通道维度上对齐到 max_channels
+            # Pad channels to max_channels.
             T, C = ts.shape
             if C < max_channels:
                 add_c = max_channels - C
@@ -328,7 +309,7 @@ class Collator_Unified:
                 else:  # default: right
                     ts = torch.cat([ts, pad_c], dim=1)
 
-            # 再在时间维度上对齐到 max_time
+            # Pad time to max_time.
             T = ts.shape[0]
             if T < max_time:
                 add_t = max_time - T
@@ -340,7 +321,7 @@ class Collator_Unified:
 
             padded_ts_list.append(ts)
 
-        # 堆叠为批量张量: (Batch, Max_Time, Max_Channels)
+        # Stack into batch tensor: (Batch, Max_Time, Max_Channels).
         return torch.stack(padded_ts_list, dim=0)
 
     def __call__(self, batch: List[Dict]) -> Dict[str, torch.Tensor]:
@@ -358,7 +339,7 @@ class Collator_Unified:
         gt_texts = [item["gt_text"] for item in batch]
         gt_results = [item.get("gt_result", None) for item in batch]
 
-        # Dynamic padding - 处理input_ids为None的情况
+        # Dynamic padding - handle input_ids=None.
         input_ids_tensor = None
         if None not in input_ids:
             input_ids_tensor = torch.nn.utils.rnn.pad_sequence(
@@ -367,7 +348,7 @@ class Collator_Unified:
                 padding_value=self.tokenizer.pad_token_id
             )
         
-        # 处理labels，如果有None则不进行padding
+        # Handle labels; skip padding if None present.
         labels_tensor = None
         if None not in labels:
             labels_tensor = torch.nn.utils.rnn.pad_sequence(
@@ -376,13 +357,9 @@ class Collator_Unified:
                 padding_value=-100
             )
 
-        # 处理输入时间序列数据 (T, C) 格式
-        # input_ts_tensors = self._pad_ts_tensors(input_ts_list)
-
         result = {
-            "input_ids": input_ids_tensor,  # 可能为None
-            "labels": labels_tensor,  # 可能为None
-            # "input_ts": input_ts_tensors,
+            "input_ids": input_ids_tensor,  # May be None.
+            "labels": labels_tensor,  # May be None.
             "input_ts_paths": input_ts_paths,
             "input_ts_list": input_ts_list,
             "input_ts_mask_list": input_ts_mask_list,
@@ -396,12 +373,10 @@ class Collator_Unified:
             "gt_results": gt_results,
         }
 
-        # 如果有预测目标时间序列数据，也进行处理
+        # If target time-series data exists, process it as well.
         if "gt_ts" in batch[0]:
             gt_ts_list = [item["gt_ts"] for item in batch]
-            # gt_ts_tensors = self._pad_ts_tensors(gt_ts_list)
             result['gt_ts_list'] = gt_ts_list
-            # result["gt_ts"] = gt_ts_tensors
             result["gt_ts_paths"] = [item.get("gt_ts_path") for item in batch]
             result["gt_ts_mask_list"] = [item.get("gt_ts_mask", None) for item in batch]
 

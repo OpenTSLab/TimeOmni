@@ -8,65 +8,66 @@ from typing import List, Dict, Any
 
 
 DETECTION_DICT = {
-    "GWOSC GW Event": {"false": ['no', 'not','没有','未'], "true": []},
-    "MDD": {"false": ["healthy","没有"], "true": ["depressive","患有"]},
+    "GWOSC GW Event": {"false": ['no', 'not'], "true": []},
+    "MDD": {"false": ["healthy"], "true": ["depressive"]},
     "MIMII Due": {"false": ['normal'], "true": ['anomaly']},
-    "STEAD": {"false": ['no', 'not','没有','未'], "true": []},
-    "TIMECAP": {"false": ['not',"不会"], "true": []},
-    "TS_MQA": {"false": ['normal','no anomalies',"正常"], "true": ['anomaly','anomalous',"异常"]},
+    "STEAD": {"false": ['no', 'not'], "true": []},
+    "TIMECAP": {"false": ['not'], "true": []},
+    "TS_MQA": {"false": ['normal','no anomalies'], "true": ['anomaly','anomalous']},
 }
 
 
 def classification_eval(data_list: List[Dict[str, Any]]) -> Dict[str, float]:
     """
-    评估分类任务和QA任务的准确率、UAR和F1分数，支持单选和多选分类
-    
+    Evaluate accuracy, UAR, and F1 for classification and QA tasks.
+    Supports single-label and multi-label classification.
+
     Args:
-        data_list: 从JSONL文件读取的数据列表，每个元素包含:
-                  - generated_text: 模型生成的文本
-                  - gt_result: 包含gt_class或answer的ground truth信息
-                  
+        data_list: List of samples loaded from JSONL. Each item contains:
+                  - generated_text: model-generated text
+                  - gt_result: ground truth info with gt_class or answer
+
     Returns:
-        Dict包含每个key的准确率、UAR和F1分数指标
+        Dict with accuracy, UAR, and F1 metrics for each key.
     """
     if not data_list:
         return {}
     
-    # 检查数据格式，确定是分类任务还是QA任务
+    # Check the data format to determine classification vs QA task.
     first_item = data_list[0]
     gt_result = first_item['gt_result']
     
-    # 统一处理：将QA任务转换为分类任务的格式
+    # Unify handling: convert QA format to classification format.
     if 'answer' in gt_result:
-        # QA任务格式: {"answer": "B"} -> 转换为 {"gt_class": {"answer": "B"}}
+        # QA format: {"answer": "B"} -> {"gt_class": {"answer": "B"}}
         all_keys = ['answer']
         is_qa_task = True
     elif 'gt_class' in gt_result:
-        # 分类任务格式: {"gt_class": {"default": ["MI", "CD"]}}
+        # Classification format: {"gt_class": {"default": ["MI", "CD"]}}
         all_keys = gt_result['gt_class'].keys()
         is_qa_task = False
     else:
         return {}
 
-    # 初始化计数器
+    # Initialize counters.
     correct_counts = {key: 0 for key in all_keys}
     total_counts = {key: 0 for key in all_keys}
 
-    # 收集所有可能的类别标签
+    # Collect all possible class labels.
     all_labels = {}
     for key in all_keys:
         all_labels[key] = set()
     
-    # 先遍历一遍收集所有类别
+    # First pass: collect all labels.
     for item in data_list:
         gt_result = item['gt_result']
         
-        # 统一处理QA和分类任务的数据格式
+        # Unified handling for QA and classification formats.
         if is_qa_task and 'answer' in gt_result:
-            # QA任务：将answer转换为gt_class格式
+            # QA task: map answer to gt_class format.
             unified_gt_class = {'answer': gt_result['answer']}
         elif 'gt_class' in gt_result:
-            # 分类任务：直接使用gt_class
+            # Classification task: use gt_class directly.
             unified_gt_class = gt_result['gt_class']
         else:
             continue
@@ -77,37 +78,37 @@ def classification_eval(data_list: List[Dict[str, Any]]) -> Dict[str, float]:
             else:
                 all_labels[key].add(gt_value.lower())
     
-    # 初始化每个类别的TP、FN和FP计数器
+    # Initialize TP/FN/FP counters per class.
     class_tp = {key: {label: 0 for label in all_labels[key]} for key in all_keys}
     class_fn = {key: {label: 0 for label in all_labels[key]} for key in all_keys}
     class_fp = {key: {label: 0 for label in all_labels[key]} for key in all_keys}
     
-    # 遍历每个样本
+    # Iterate over samples.
     for item in data_list:
-        generated_text = item.get('generated_text', '').lower()  # 转小写便于比较  
+        generated_text = item.get('generated_text', '').lower()  # Lowercase for matching.
         gt_result = item['gt_result']
         
-        # 统一处理QA和分类任务的数据格式
+        # Unified handling for QA and classification formats.
         if is_qa_task and 'answer' in gt_result:
-            # QA任务：将answer转换为gt_class格式
+            # QA task: map answer to gt_class format.
             unified_gt_class = {'answer': gt_result['answer']}
         elif 'gt_class' in gt_result:
-            # 分类任务：直接使用gt_class
+            # Classification task: use gt_class directly.
             unified_gt_class = gt_result['gt_class']
         else:
             continue
         
-        # 统一处理逻辑
+        # Unified evaluation logic.
         for key, gt_value in unified_gt_class.items():
             total_counts[key] += 1
             
-            # 处理单选和多选情况
+            # Handle single-label vs multi-label.
             if isinstance(gt_value, list):
-                # 多选情况：计算部分分数、UAR和F1
+                # Multi-label: compute partial score, UAR, and F1.
                 correct_labels = 0
                 total_labels = len(gt_value)
                 
-                # 收集预测为正的标签
+                # Collect predicted positive labels.
                 predicted_labels = set()
                 for label in all_labels[key]:
                     if label in generated_text:
@@ -122,17 +123,17 @@ def classification_eval(data_list: List[Dict[str, Any]]) -> Dict[str, float]:
                     else:
                         class_fn[key][label] += 1
                 
-                # 计算误报：预测为正但实际为负的标签
+                # False positives: predicted positive but actually negative.
                 for label in predicted_labels:
                     if label not in gt_labels_set:
                         class_fp[key][label] += 1
                 
-                # 按比例给分：正确预测的标签数 / 总标签数
+                # Partial credit: correct labels / total labels.
                 if total_labels > 0:
                     partial_score = correct_labels / total_labels
                     correct_counts[key] += partial_score
             else:
-                # 单选情况：检查ground truth值是否在generated_text中
+                # Single-label: check if ground truth appears in generated text.
                 gt_label_lower = gt_value.lower()
                 predicted_labels = set()
                 for label in all_labels[key]:
@@ -145,15 +146,15 @@ def classification_eval(data_list: List[Dict[str, Any]]) -> Dict[str, float]:
                 else:
                     class_fn[key][gt_label_lower] += 1
                 
-                # 计算误报
+                # False positives.
                 for label in predicted_labels:
                     if label != gt_label_lower:
                         class_fp[key][label] += 1
     
-    # 计算准确率、UAR和F1分数
+    # Compute accuracy, UAR, and F1.
     results = {}
     for key in all_keys:
-        # 确定结果键名的后缀
+        # Determine metric name suffix.
         if key in ['default', 'answer']:
             suffix = ''
         else:
@@ -164,7 +165,7 @@ def classification_eval(data_list: List[Dict[str, Any]]) -> Dict[str, float]:
         else:
             results[f'accuracy{suffix}'] = 0.0
         
-        # 统一的UAR和F1计算
+        # Unified UAR and F1 computation.
         recalls = []
         precisions = []
         f1_scores = []
@@ -174,17 +175,17 @@ def classification_eval(data_list: List[Dict[str, Any]]) -> Dict[str, float]:
             fn = class_fn[key][label]
             fp = class_fp[key][label]
             
-            # 计算召回率
+            # Recall.
             if tp + fn > 0:
                 recall = tp / (tp + fn)
                 recalls.append(recall)
             
-            # 计算精确率
+            # Precision.
             if tp + fp > 0:
                 precision = tp / (tp + fp)
                 precisions.append(precision)
             
-            # 计算F1分数
+            # F1 score.
             if tp + fn > 0 and tp + fp > 0:
                 recall = tp / (tp + fn)
                 precision = tp / (tp + fp)
@@ -207,13 +208,13 @@ def classification_eval(data_list: List[Dict[str, Any]]) -> Dict[str, float]:
 
 def detect(generated_text, dataset_name):
     """
-    根据DETECTION_DICT检测生成文本中的事件检测结果
-    
-    逻辑：
-    1. 如果在生成内容中检测到false的list中的任意一个，就认为是false
-    2. 否则就是true（如果true是空list）
-    3. 如果true不是空的，就检测一下
-    4. 如果两个都检测不到，需要返回None
+    Detect event results in the generated text using DETECTION_DICT.
+
+    Logic:
+    1. If any false indicator appears, return False.
+    2. If the true list is empty and no false indicator is found, return True.
+    3. If the true list is not empty, check for any true indicator.
+    4. If neither is found, return None.
     """
     if dataset_name not in DETECTION_DICT:
         raise ValueError(f"Dataset '{dataset_name}' not found in DETECTION_DICT")
@@ -226,35 +227,35 @@ def detect(generated_text, dataset_name):
 
     # import pdb; pdb.set_trace()
     
-    # 1. 如果在生成内容中检测到false的list中的任意一个，就认为是false
+    # 1. Any false indicator -> False.
     for indicator in false_indicators:
         if indicator.lower() in generated_lower:
             return False
     
-    # 2. 如果true是空list，且没有检测到false指示词，则返回True
+    # 2. Empty true list and no false indicator -> True.
     if not true_indicators:
         return True
     
-    # 3. 如果true不是空的，就检测一下
+    # 3. Non-empty true list: check indicators.
     for indicator in true_indicators:
         if indicator.lower() in generated_lower:
             return True
     
-    # 4. 如果两个都检测不到，需要返回None
+    # 4. Neither found -> None.
     return None
 
 
 def extract_predicted_times(generated_text: str) -> List[int]:
     """
-    从生成文本中提取所有预测的时间数值
-    
+    Extract all predicted time values from generated text.
+
     Args:
-        generated_text: 模型生成的文本
-        
+        generated_text: model-generated text
+
     Returns:
-        List[int]: 按出现顺序提取的时间数值列表
+        List[int]: extracted time values in order of appearance
     """
-    # 使用正则表达式提取数字
+    # Extract numbers via regex.
     numbers = re.findall(r'\d+', generated_text)
     if numbers:
         return [int(num) for num in numbers]
@@ -263,17 +264,17 @@ def extract_predicted_times(generated_text: str) -> List[int]:
 
 def detection_eval(data_list: List[Dict[str, Any]], dataset_name: str, task: str) -> Dict[str, float]:
     """
-    评估检测任务的准确率、F1分数和相对误差
-    
+    Evaluate detection task accuracy, F1, and relative error.
+
     Args:
-        data_list: 从JSONL文件读取的数据列表，每个元素包含:
-                  - generated_text: 模型生成的文本
-                  - gt_result: 包含contain和多个时间字段的ground truth信息
-        dataset_name: 数据集名称，用于获取对应的检测字典
-        task: 任务类型，"Event Detection"或"Anomaly Detection"
-                  
+        data_list: List of samples loaded from JSONL. Each item contains:
+                  - generated_text: model-generated text
+                  - gt_result: ground truth with contain and time fields
+        dataset_name: dataset name used to select detection dictionary
+        task: task type, "Event Detection" or "Anomaly Detection"
+
     Returns:
-        Dict包含检测准确率、F1分数和相对误差中位数
+        Dict with detection accuracy, F1 score, and median relative error
     """
     if not data_list:
         return {}
@@ -282,13 +283,13 @@ def detection_eval(data_list: List[Dict[str, Any]], dataset_name: str, task: str
     total_samples = 0
     relative_errors = []
     
-    # F1分数计算需要的统计量
-    true_positive = 0   # 真正例：实际为正，预测为正
-    false_positive = 0  # 假正例：实际为负，预测为正
-    true_negative = 0   # 真负例：实际为负，预测为负
-    false_negative = 0  # 假负例：实际为正，预测为负
+    # Confusion-matrix stats for F1.
+    true_positive = 0   # True positive: actual positive, predicted positive
+    false_positive = 0  # False positive: actual negative, predicted positive
+    true_negative = 0   # True negative: actual negative, predicted negative
+    false_negative = 0  # False negative: actual positive, predicted negative
     
-    # 成功率：能做出明确判断（非None）的比例
+    # Success rate: proportion of non-None predictions.
     success_count = 0
     
     for item in data_list:
@@ -304,19 +305,19 @@ def detection_eval(data_list: List[Dict[str, Any]], dataset_name: str, task: str
         
         predicted_contain = detect(item['generated_text'], dataset_name)
         
-        # 如果无法判断，按失败计入（保持在分母中且不增加correct_detection）
+        # If undecidable, count as failure in denominator only.
         if predicted_contain is None:
-            # 不参与F1的混淆矩阵，不计算相对误差
+            # Exclude from confusion matrix and relative error.
             continue
 
-        # 能判断则计为一次成功
+        # Decidable prediction counts as success.
         success_count += 1
         
         detection_correct = (predicted_contain == gt_contain)
         if detection_correct:
             correct_detection += 1
         
-        # 统计F1分数需要的混淆矩阵元素
+        # Update confusion matrix for F1.
         if gt_contain == True and predicted_contain == True:
             true_positive += 1
         elif gt_contain == False and predicted_contain == True:
@@ -326,7 +327,7 @@ def detection_eval(data_list: List[Dict[str, Any]], dataset_name: str, task: str
         elif gt_contain == True and predicted_contain == False:
             false_negative += 1
             
-        # 只有在Event Detection任务且检测正确且包含事件时才进行数字抓取
+        # For event detection, extract numbers only when detection is correct and positive.
         if task == "event detection" and gt_contain and predicted_contain:
             predicted_times = extract_predicted_times(generated_text)
             
@@ -335,28 +336,28 @@ def detection_eval(data_list: List[Dict[str, Any]], dataset_name: str, task: str
                 if key != 'contain' and isinstance(value, (int, float)) and value is not None:
                     gt_time_fields.append((key, value))
             
-            # 如果有时间字段和预测数字，计算相对误差
+            # If time fields and predicted numbers exist, compute relative error.
             if gt_time_fields and predicted_times:
-                # 按顺序匹配：第一个gt时间对应第一个预测数字，以此类推
+                # Match by order: first GT time with first predicted number, etc.
                 for i, (field_name, gt_time) in enumerate(gt_time_fields):
                     if i < len(predicted_times):
                         predicted_time = predicted_times[i]
-                        # 计算相对误差
+                        # Compute relative error.
                         relative_error = abs(predicted_time - gt_time) / abs(gt_time)
                         relative_errors.append(relative_error)
     
-    # 计算结果
+    # Compute results.
     results = {}
     results['accuracy'] = correct_detection / total_samples if total_samples > 0 else 0.0
     
-    # 计算精确率、召回率和F1分数
+    # Compute precision, recall, and F1.
     precision = true_positive / (true_positive + false_positive) if (true_positive + false_positive) > 0 else 0.0
     recall = true_positive / (true_positive + false_negative) if (true_positive + false_negative) > 0 else 0.0
     f1_score = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
     
     results['f1_score'] = f1_score
 
-    # 成功率：非None预测占比
+    # Success rate: proportion of non-None predictions.
     results['success_rate'] = success_count / total_samples if total_samples > 0 else 0.0
 
     if task == "event detection":
@@ -368,13 +369,13 @@ def detection_eval(data_list: List[Dict[str, Any]], dataset_name: str, task: str
 
 def load_jsonl(file_path: str) -> List[Dict[str, Any]]:
     """
-    从JSONL文件加载数据
-    
+    Load data from a JSONL file.
+
     Args:
-        file_path: JSONL文件路径
-        
+        file_path: JSONL file path
+
     Returns:
-        数据列表
+        List of data records
     """
     data_list = []
     with open(file_path, 'r', encoding='utf-8') as f:
@@ -387,25 +388,25 @@ def load_jsonl(file_path: str) -> List[Dict[str, Any]]:
 
 def save_results_to_csv(results: List[Dict[str, Any]], output_csv: str):
     """
-    将评估结果保存到CSV文件
-    
+    Save evaluation results to a CSV file.
+
     Args:
-        results: 评估结果列表，每个元素是一个字典，包含各个指标
-        output_csv: 输出CSV文件路径
+        results: List of result dicts with metrics
+        output_csv: Output CSV path
     """
     if not results:
         print("No results to save.")
         return
     
-    # 根据filename进行排序
+    # Sort by filename.
     results.sort(key=lambda x: x['filename'])
     
-    # 获取所有可能的列名
+    # Collect all possible column names.
     all_columns = set()
     for result in results:
         all_columns.update(result.keys())
     
-    # 确保filename列在第一位
+    # Ensure filename is the first column.
     columns = ['filename'] + sorted([col for col in all_columns if col != 'filename'])
     
     os.makedirs(os.path.dirname(output_csv), exist_ok=True)
@@ -420,35 +421,33 @@ def save_results_to_csv(results: List[Dict[str, Any]], output_csv: str):
 
 def evaluate_all_files(input_folder: str, output_csv: str):
     """
-    遍历文件夹中的所有JSONL文件，根据数据集类型调用相应的评估函数
-    
+    Traverse JSONL files in a folder and run evaluation by dataset type.
+
     Args:
-        input_folder: 输入文件夹路径
-        output_csv: 输出CSV文件路径
+        input_folder: input folder path
+        output_csv: output CSV path
     """
     results = []
     results_suffix = []
     
-    # 遍历文件夹中的所有JSONL文件
+    # Iterate over JSONL files in the folder.
     for filename in os.listdir(input_folder):
         if filename.endswith('.jsonl'):
             file_path = os.path.join(input_folder, filename)
             print(f"Processing: {filename}")
             
-            # 加载数据
+            # Load data.
             data_list = load_jsonl(file_path)
             if not data_list:
                 print(f"  Warning: No data found in {filename}")
                 continue
             
-            # 获取第一个样本的信息来判断数据集类型
+            # Use the first sample to determine dataset type.
             first_item = data_list[0]
             dataset_name = first_item.get('dataset_name', '')
             task = first_item.get('task', '').lower()
 
-            # if dataset_name !="TS_MQA": continue
-            
-            # 根据数据集类型调用相应的评估函数
+            # Call the appropriate evaluation based on dataset type.
             result_row = {'filename': filename}
 
             if task == "classification" or task == "qa":
@@ -459,14 +458,14 @@ def evaluate_all_files(input_folder: str, output_csv: str):
                 eval_results = detection_eval(data_list, dataset_name, task)
 
             for metric_key, value in eval_results.items():
-                result_row[metric_key] = f"{(value * 100):.2f}"  # 转为百分数并保留两位小数
+                result_row[metric_key] = f"{(value * 100):.2f}"  # Percent with 2 decimals.
             
             if "accuracy" in result_row:
                 results.append(result_row)
             else:
                 results_suffix.append(result_row)
     
-    # 保存结果到CSV
+    # Save results to CSV.
     if output_csv:
         save_results_to_csv(results, output_csv)
         if results_suffix:
@@ -485,10 +484,10 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
     
-    # 检查输入文件夹是否存在
+    # Check input folder existence.
     if not os.path.isdir(args.input_folder):
         print(f"Error: Input folder '{args.input_folder}' does not exist.")
         exit(1)
     
-    # 运行评估
+    # Run evaluation.
     evaluate_all_files(args.input_folder, args.output)

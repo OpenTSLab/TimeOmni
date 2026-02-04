@@ -12,7 +12,7 @@ from data_provider.dataset import Dataset_Unified, Collator_Unified
 
 
 def setup_distributed():
-    """设置分布式环境"""
+    """Set up the distributed environment."""
     if 'RANK' in os.environ and 'WORLD_SIZE' in os.environ:
         rank = int(os.environ["RANK"])
         world_size = int(os.environ['WORLD_SIZE'])
@@ -28,7 +28,7 @@ def setup_distributed():
 
 
 def create_dataloader(jsonl_file, tokenizer, media_root, batch_size, num_workers=16, distributed=False):
-    """为单个jsonl创建DataLoader"""
+    """Create a DataLoader for a single JSONL file."""
     dataset = Dataset_Unified(
         tokenizer=tokenizer,
         jsonl_file_path=jsonl_file,
@@ -54,7 +54,7 @@ def create_dataloader(jsonl_file, tokenizer, media_root, batch_size, num_workers
 
 
 def inference_single_jsonl(model, dataloader, jsonl_file, generation_config, rank=0):
-    """对单个jsonl进行推理"""
+    """Run inference for a single JSONL file."""
     results = []
     
     if rank == 0:
@@ -66,7 +66,7 @@ def inference_single_jsonl(model, dataloader, jsonl_file, generation_config, ran
             input_ts = batch['input_ts_list']
             input_ts = [input.cuda() for input in input_ts]
 
-            # 批处理推理 - 使用input_texts作为问题
+            # Batch inference using input_texts as prompts.
             with torch.no_grad():
                 responses = model.generate(
                     input_ts,
@@ -74,7 +74,7 @@ def inference_single_jsonl(model, dataloader, jsonl_file, generation_config, ran
                     generation_config=generation_config
                 )
             
-            # 保存结果
+            # Save results.
             for i in range(len(batch['ids'])):
                 results.append({
                     'id': batch['ids'][i],
@@ -91,12 +91,12 @@ def inference_single_jsonl(model, dataloader, jsonl_file, generation_config, ran
         except Exception as e:
             print(f"[ERROR] Exception in batch inference for '{jsonl_file}': {e}")
             print(f"[ERROR] Batch IDs: {batch['ids']}")
-            # 错误时不保存当前batch的任何结果，直接跳过
+            # On error, skip saving results for this batch.
     return results
 
 
 def save_results(results, output_file):
-    """保存结果到jsonl文件"""
+    """Save results to a JSONL file."""
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
     with open(output_file, 'w', encoding='utf-8') as f:
         for result in results:
@@ -123,7 +123,7 @@ def main():
 
     args = parser.parse_args()
 
-    # 设置分布式环境
+    # Set up distributed environment.
     distributed, rank, world_size, gpu = setup_distributed()
 
     # Load model
@@ -139,7 +139,7 @@ def main():
     if rank == 0:
         print("Model loaded successfully!")
 
-    # 逐个处理 data_file_list
+    # Process each file in data_file_list.
     for data_file in args.data_file_list:
         if rank == 0:
             print(f"Loading dataset from {data_file}...")
@@ -167,7 +167,7 @@ def main():
             rank=rank
         )
 
-        # 收集所有进程的结果
+        # Gather results from all processes.
         if distributed:
             dist.barrier()
             all_results = [None] * world_size
@@ -177,9 +177,9 @@ def main():
                 for rank_results in all_results:
                     results.extend(rank_results)
 
-        # 只有主进程保存结果
+        # Only the main process saves results.
         if rank == 0:
-            # 生成输出文件名
+            # Build output filename.
             base_name = os.path.basename(data_file)
             output_file = os.path.join(args.output_folder, base_name)
             save_results(results, output_file)
