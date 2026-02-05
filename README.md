@@ -7,7 +7,7 @@
 
 **🎉 Accepted to ICLR 2026**
 
-**📢 The datasets and baseline evaluation scripts will be open-sourced on Hugging Face.**
+**📢 The datasets and baseline evaluation scripts will be open-sourced soon.**
 
 **This is the official SciTS (TimeOmni) repository.**
 
