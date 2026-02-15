@@ -8,7 +8,7 @@
 
 **🎉 Accepted to ICLR 2026**
 
-**📢 The datasets and baseline evaluation scripts is available at [here](https://huggingface.co/datasets/OpenTSLab/SciTS).**
+**📢 The SciTS benchmark dataset and baseline evaluation scripts are available [here](https://huggingface.co/datasets/OpenTSLab/SciTS).**
 
 **This is the official SciTS (TimeOmni) repository.**
 
