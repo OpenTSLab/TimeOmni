@@ -4,10 +4,11 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.2.2-ee4c2c.svg)](https://pytorch.org/)
 [![Transformers](https://img.shields.io/badge/Transformers-4.51.0-yellow.svg)](https://github.com/huggingface/transformers)
+[![Hugging Face](https://img.shields.io/badge/Hugging%20Face-Dataset-yellow)](https://huggingface.co/datasets/OpenTSLab/SciTS)
 
 **🎉 Accepted to ICLR 2026**
 
-**📢 The datasets and baseline evaluation scripts will be open-sourced soon.**
+**📢 The datasets and baseline evaluation scripts is available at [here](https://huggingface.co/datasets/OpenTSLab/SciTS).**
 
 **This is the official SciTS (TimeOmni) repository.**
 
