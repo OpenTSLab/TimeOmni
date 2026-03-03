@@ -142,7 +142,7 @@ If you find this work useful, please cite:
 ```bibtex
 @inproceedings{wu2025scits,
     title={{SciTS: Scientific Time Series Understanding and Generation with LLMs}}, 
-    author={Wu, Wen and Zhang, Ziyang and Liu, Liwei and Xu, Xuenan and Liu, Junlin and Fan, Ke and Lv, Qitan and Zhuang, Jimin and Zhang, Chen and Yuan, Zheqi and others},
+    author={Wu, Wen and Zhang, Ziyang and Liu, Liwei and Xu, Xuenan and Liu, Junlin and Fan, Ke and Lv, Qitan and Zhuang, Jimin and Zhang, Chen and Yuan, Zheqi and Hou, Siyuan and Lin, Tianyi and Chen, Kai and Zhou,Bowen and Zhang, Chao},
     booktitle={Proc. ICLR},
     year={2026},
     address={Rio de Janeiro}
