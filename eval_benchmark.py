@@ -186,12 +186,8 @@ def classification_eval(data_list: List[Dict[str, Any]]) -> Dict[str, float]:
                 precisions.append(precision)
             
             # F1 score.
-            if tp + fn > 0 and tp + fp > 0:
-                recall = tp / (tp + fn)
-                precision = tp / (tp + fp)
-                if precision + recall > 0:
-                    f1 = 2 * (precision * recall) / (precision + recall)
-                    f1_scores.append(f1)
+            if tp + fn > 0:
+                f1_scores.append(2 * tp / (2 * tp + fp + fn))
         
         if recalls:
             results[f'uar{suffix}'] = np.mean(recalls)
